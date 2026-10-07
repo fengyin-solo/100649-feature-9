@@ -63,6 +63,50 @@
       </tbody>
     </table>
 
+    <section class="legacy-section">
+      <header class="legacy-head">
+        <h3>值班交接遗留台账</h3>
+        <button class="btn ghost" type="button" @click="reloadLegacy">刷新台账</button>
+      </header>
+      <p class="page-desc">余热锅炉判异批复在此回写留痕：判定依据、批复意见、谁在什么时候改的都可倒查。</p>
+      <table v-if="legacyRows.length" class="data-table legacy-table">
+        <thead>
+          <tr>
+            <th>批复时间</th>
+            <th>来源记录</th>
+            <th>锅炉编号</th>
+            <th>读数时间</th>
+            <th>处理结果</th>
+            <th>判定依据</th>
+            <th>批复意见</th>
+            <th>批复人</th>
+            <th>班次</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="item in legacyRows" :key="String(item.id)">
+            <td>{{ item.decidedAt }}</td>
+            <td>{{ moduleName(item.module) }} #{{ item.sourceId }}</td>
+            <td>{{ item.boilerNo }}</td>
+            <td>{{ item.recordedAt }}</td>
+            <td><span class="verify-tag" :class="item.action === '判定异常' ? 'tag-abnormal' : 'tag-ok'">{{ item.action }}</span></td>
+            <td class="legacy-basis">
+              <ul class="reason-list">
+                <li v-for="(basis, idx) in item.basis" :key="idx">{{ basis }}</li>
+              </ul>
+            </td>
+            <td>{{ item.opinion }}</td>
+            <td>{{ item.operator }}</td>
+            <td>{{ item.shiftLabel }}</td>
+          </tr>
+        </tbody>
+      </table>
+      <div v-else class="state-panel">
+        <strong>暂无记录</strong>
+        <p class="state-sub">遗留台账暂时一条都没有：锅炉异常读数完成判异批复后，会自动回写到这里。</p>
+      </div>
+    </section>
+
     <footer class="page-foot">
       <span>共 {{ total }} 条值班交接班记录</span>
       <span v-if="errorMessage" class="error-text">{{ errorMessage }}</span>
@@ -76,28 +120,41 @@ import { computed, onMounted, ref } from 'vue'
 import {
   downloadEntries,
   listEntries,
+  loadShiftLegacy,
   moduleMeta,
   runAction as applyAction,
 } from '@/api/local-service'
-import type { EntryRow } from '@/data/types'
+import { MODULE_BY_KEY } from '@/data/modules'
+import type { EntryRow, LegacyEntry } from '@/data/types'
 
 const meta = moduleMeta('shift')
 const columns = ["交接编号", "值班班组", "班次", "交班人员", "接班人员", "交接事项", "交接时间", "交接状态"]
 const actions = ["发起交接", "确认交接", "登记遗留"]
 const statuses = ["待交接", "交接中", "已交接", "有遗留"]
-const stats = [{"label": "待交接班次", "value": 0}, {"label": "已交接班次", "value": 0}, {"label": "有遗留事项", "value": 0}]
 
 const rows = ref<EntryRow[]>([])
 const total = ref(0)
 const errorMessage = ref('')
 const filters = ref<Record<string, string>>({})
 const filterFields = columns.slice(0, 3)
+const legacyRows = ref<LegacyEntry[]>([])
+
+const stats = computed(() => [
+  { label: "待交接班次", value: rows.value.filter((row) => String(row.status) === "待交接").length },
+  { label: "已交接班次", value: rows.value.filter((row) => String(row.status) === "已交接").length },
+  { label: "有遗留事项", value: legacyRows.value.filter((item) => item.action === '判定异常').length },
+])
+
 const statusSummary = computed(() =>
   statuses.map((status: string) => ({
     status,
     count: rows.value.filter((row) => String(row.status) === status).length,
   })),
 )
+
+function moduleName(key: string): string {
+  return MODULE_BY_KEY.get(key)?.name ?? key
+}
 
 function resetFilters() {
   filters.value = {}
@@ -122,12 +179,17 @@ function runAction(action: string, row: EntryRow) {
   reload()
 }
 
+function reloadLegacy() {
+  legacyRows.value = loadShiftLegacy()
+}
+
 function reload() {
   errorMessage.value = ''
   try {
     const payload = listEntries(meta.key, filters.value)
     rows.value = payload.items
     total.value = payload.total
+    reloadLegacy()
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : '值班交接班列表读取失败'
   }

@@ -8,6 +8,21 @@ export type EntryRow = {
   [field: string]: string | number | boolean
 }
 
+/** 值班交接遗留台账条目：锅炉判异批复回写进来，谁、什么时候改的都能倒查。 */
+export type LegacyEntry = {
+  id: number
+  module: string
+  sourceId: number
+  boilerNo: string
+  recordedAt: string
+  basis: string[]
+  opinion: string
+  operator: string
+  shiftLabel: string
+  action: string
+  decidedAt: string
+}
+
 export type ModuleMeta = {
   key: string
   name: string
