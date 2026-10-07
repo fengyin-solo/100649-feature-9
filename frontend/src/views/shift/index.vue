@@ -67,6 +67,50 @@
       <span>共 {{ total }} 条值班交接班记录</span>
       <span v-if="errorMessage" class="error-text">{{ errorMessage }}</span>
     </footer>
+
+    <section class="ledger">
+      <header class="ledger-head">
+        <div>
+          <h3>值班交接遗留台账</h3>
+          <p class="page-desc">余热锅炉读数异常的判定批复会回写到这里，只追加不改写，谁、什么时候、按什么依据改判都可倒查。</p>
+        </div>
+        <button class="btn" type="button" @click="reloadLedger">刷新台账</button>
+      </header>
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>序号</th>
+            <th>批复事件</th>
+            <th>锅炉编号</th>
+            <th>判定排污率</th>
+            <th>判定依据</th>
+            <th>批复意见</th>
+            <th>批复人</th>
+            <th>批复时间</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="entry in ledger" :key="entry.id" :class="{ 'row-dismissed': entry.decision === 'dismissed' }">
+            <td>{{ entry.id }}</td>
+            <td>
+              <span class="tag" :class="entry.decision === 'confirmed' ? 'tag-abnormal' : 'tag-ok'">
+                {{ entry.decision === 'confirmed' ? '确认异常' : '解除异常' }}
+              </span>
+              {{ entry.event.replace(/^锅炉异常判定批复：/, '') }}
+            </td>
+            <td>{{ entry.boilerId }}</td>
+            <td>{{ entry.rate }}</td>
+            <td class="basis-cell">{{ entry.basis }}</td>
+            <td>{{ entry.comment }}</td>
+            <td>{{ entry.reviewer }}</td>
+            <td>{{ entry.time }}</td>
+          </tr>
+          <tr v-if="!ledger.length">
+            <td colspan="8" class="empty-state">暂无遗留台账记录</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
   </section>
 </template>
 
@@ -79,6 +123,7 @@ import {
   moduleMeta,
   runAction as applyAction,
 } from '@/api/local-service'
+import { listLegacyLedger, type LegacyLedgerEntry } from '@/data/legacy-ledger'
 import type { EntryRow } from '@/data/types'
 
 const meta = moduleMeta('shift')
@@ -92,12 +137,18 @@ const total = ref(0)
 const errorMessage = ref('')
 const filters = ref<Record<string, string>>({})
 const filterFields = columns.slice(0, 3)
+const ledger = ref<LegacyLedgerEntry[]>([])
 const statusSummary = computed(() =>
   statuses.map((status: string) => ({
     status,
     count: rows.value.filter((row) => String(row.status) === status).length,
   })),
 )
+
+function reloadLedger() {
+  // 台账只追加：最新批复在最后，倒序展示，先看到最近一次谁改的。
+  ledger.value = [...listLegacyLedger()].sort((a, b) => b.id - a.id)
+}
 
 function resetFilters() {
   filters.value = {}
@@ -133,5 +184,25 @@ function reload() {
   }
 }
 
-onMounted(reload)
+onMounted(() => {
+  reload()
+  reloadLedger()
+})
 </script>
+
+<style scoped>
+.ledger { margin-top: 24px; }
+.ledger-head { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
+.ledger-head h3 { margin: 0; font-size: 15px; }
+.tag {
+  display: inline-block;
+  font-size: 12px;
+  border-radius: 4px;
+  padding: 1px 7px;
+  margin-right: 4px;
+}
+.tag-abnormal { background: #fee4e2; color: #b42318; }
+.tag-ok { background: #e7f6ec; color: #1a7f37; }
+.row-dismissed { background: #f6f8fb; color: #475569; }
+.basis-cell { min-width: 260px; font-size: 12px; color: #475569; }
+</style>

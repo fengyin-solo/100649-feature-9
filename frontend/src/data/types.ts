@@ -5,7 +5,8 @@ export type EntryRow = {
   status: string
   pending: boolean
   abnormal: boolean
-  [field: string]: string | number | boolean
+  // 业务字段以字符串/数值为主；批复等嵌套结构用 unknown 透传，由各业务线自行解析。
+  [field: string]: unknown
 }
 
 export type ModuleMeta = {
